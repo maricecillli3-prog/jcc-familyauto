@@ -1,9 +1,7 @@
 // api/identificar.js
-// Edge Function — Proxy seguro para Claude API
-// Protege a chave ANTHROPIC_API_KEY do frontend
+// Proxy seguro para Gemini API — Identifica peça, OEM, preço e descrição
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -26,7 +24,7 @@ Peça solicitada: ${peca}
 Retorne exatamente este JSON:
 {
   "nome_peca": "nome técnico completo da peça em português",
-  "codigo_oem": "código OEM original do fabricante (ex: 71736098, 0 451 103 082)",
+  "codigo_oem": "código OEM original do fabricante",
   "aplicacao": "${marca} ${modelo} ${ano}",
   "motor": "${motor}",
   "preco_medio": "R$ XX,00 — R$ XX,00",
@@ -36,28 +34,29 @@ Retorne exatamente este JSON:
   "compatibilidades": ["${marca} ${modelo} ${parseInt(ano)-1}", "${marca} ${modelo} ${parseInt(ano)+1}"]
 }`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const apiKey = process.env.GOOGLE_GEMINI_KEY;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 1000
+        }
       })
     });
 
     const data = await response.json();
 
     if (data.error) {
-      console.error('Anthropic error:', data.error);
+      console.error('Gemini error:', data.error);
       return res.status(500).json({ error: data.error.message });
     }
 
-    const text = data.content.map(i => i.text || '').join('');
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const clean = text.replace(/```json|```/g, '').trim();
     const resultado = JSON.parse(clean);
 
