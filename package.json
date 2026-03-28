@@ -1,11 +1,6 @@
 {
   "name": "jcc-family",
   "version": "1.0.0",
-  "description": "JCC & FAMILY - Sistema de Consulta de Autopeças",
-  "scripts": {
-    "dev": "vercel dev",
-    "build": "echo 'Static build'"
-  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0"
   }
