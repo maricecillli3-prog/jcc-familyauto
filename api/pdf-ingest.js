@@ -1,5 +1,6 @@
 // api/pdf-ingest.js
-// Recebe texto extraído do PDF e usa Gemini para estruturar os dados
+// Recebe texto extraído do PDF pelo frontend e usa Claude para estruturar os dados
+// O upload do PDF para Supabase Storage é feito direto do frontend
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,7 +20,7 @@ export default async function handler(req, res) {
 Analise o texto abaixo (página ${pagina_atual} de ${total_paginas}) e extraia TODOS os registros de peças encontrados.
 Responda APENAS com um array JSON válido, sem markdown, sem texto extra.
 
-Cada item do array deve ter exatamente:
+Cada item do array deve ter:
 {
   "marca": "marca do veículo",
   "modelo": "modelo do veículo",
@@ -30,23 +31,22 @@ Cada item do array deve ter exatamente:
   "preco_medio": numero_decimal_ou_null
 }
 
-Se não encontrar dados estruturados, retorne apenas: []
+Se não encontrar dados estruturados, retorne: []
 
 TEXTO DO CATÁLOGO:
 ${texto.slice(0, 8000)}`;
 
-    const apiKey = process.env.GOOGLE_GEMINI_KEY;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-    const response = await fetch(url, {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 4000
-        }
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }]
       })
     });
 
@@ -56,7 +56,7 @@ ${texto.slice(0, 8000)}`;
       return res.status(500).json({ error: data.error.message });
     }
 
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    const text = data.content.map(i => i.text || '').join('');
     const clean = text.replace(/```json|```/g, '').trim();
 
     let pecas = [];
@@ -67,6 +67,7 @@ ${texto.slice(0, 8000)}`;
       pecas = [];
     }
 
+    // Filtra registros inválidos
     const validos = pecas.filter(p =>
       p.marca && p.modelo && p.ano && p.motor && p.codigo_oem
     );
